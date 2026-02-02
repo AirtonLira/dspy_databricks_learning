@@ -16,5 +16,5 @@ def ingestion_raw_layer():
         .format("csv")
         .option("header", "true")         
         .option("inferSchema", "true")
-        .load("/Volumes/sandbox/vendas/dspy_databricks_learning/b2w_reviews.csv")
+        .load("/Volumes/workspace/b2w/dspy_databricks_learning/b2w_reviews.csv")
     )
