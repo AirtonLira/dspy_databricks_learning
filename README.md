@@ -1,7 +1,3 @@
-Aqui está o código completo do **README.md** em formato Markdown puro.
-
-Você pode copiar o bloco abaixo inteiro e colar no seu arquivo `README.md`.
-
 ```markdown
 # DSPy Databricks Learning
 
