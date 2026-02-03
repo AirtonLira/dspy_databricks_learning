@@ -17,10 +17,7 @@ classify_sentiment_udf = udf(_classify_sentiment, StringType())
 )
 def bronze_b2w_reviews():
     df = spark.read.table("LIVE._b_2_w_reviews")
-    df_clean = (
-        df.withColumn("overall_rating_int", col("overall_rating").cast(IntegerType()))
-          .filter(col("overall_rating_int") > 1)
-          .withColumn("sentiment", classify_sentiment_udf(col("overall_rating_int")))
-    )
+    df_clean = df.filter(col("overall_rating_int") > 1)
     df_clean = df_clean.filter(col("review_text").isNotNull())
+    df_clean = df_clean.withColumn("sentiment", classify_sentiment_udf(col("overall_rating_int")))
     return df_clean

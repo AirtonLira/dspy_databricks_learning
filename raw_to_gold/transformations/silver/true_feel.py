@@ -31,8 +31,10 @@ class ExtractSentimentReason(Signature):
     )
 
 # Opção A: Predict simples
-extract_reason = dspy.Predict(ExtractSentimentReason)
+dspy_config = DspyConfig()
+dspy_config.test_api()
 
+extract_reason = dspy_config.dspy.Predict(ExtractSentimentReason)
 # ============================
 # 3. Função auxiliar para processar
 # ============================
@@ -43,48 +45,12 @@ def process_single_review(review_text: str, sentiment: str) -> str:
     except Exception as e:
         return f"erro_dspy: {str(e)[:30]}"
 
-# Pegar chave do secret
-OPENROUTER_API_KEY = dbutils.secrets.get("openrouter", "api_key") 
-
-# 2. Configurar DSPy localmente
-lm_test = dspy.LM(
-    model="openrouter/liquid/lfm-2.5-1.2b-instruct:free",
-    api_key=OPENROUTER_API_KEY,
-    max_tokens=256
-)
-dspy.configure(lm=lm_test)
-
-# 3. Testar uma previsão simples
-print("Iniciando teste de chamada API...")
-try:
-    # Definir a classe inline só para teste
-    class TestSignature(dspy.Signature):
-        texto = dspy.InputField()
-        resposta = dspy.OutputField()
-    
-    predictor = dspy.Predict(TestSignature)
-    resultado = predictor(texto="Diga 'Olá Mundo' em português.")
-    
-    print("\n✅ SUCESSO! A API respondeu:")
-    print(resultado.resposta)
-except Exception as e:
-    print(f"\n❌ ERRO NA API: {str(e)}")
-
-
 # ============================
 # 4. Pandas UDF com Métricas
 # ============================
 @pandas_udf(StringType())
 def extract_sentiment_reason_dspy(texts: pd.Series, sentiments: pd.Series) -> pd.Series:
     results = []
-
-    # Configuração do modelo dentro do worker
-    lm = dspy.LM(
-        model="openrouter/liquid/lfm-2.5-1.2b-instruct:free",
-        api_key=OPENROUTER_API_KEY,
-        max_tokens=256
-    )
-    dspy.configure(lm=lm)
     
     for text, sentiment in zip(texts, sentiments):
         try:
