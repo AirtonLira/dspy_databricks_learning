@@ -1,3 +1,13 @@
+import dspy
+from dspy import InputField, OutputField, Signature
+from pyspark.sql.functions import col, pandas_udf, current_timestamp, lit
+from pyspark.sql.types import StringType
+from databricks.sdk.runtime import dbutils
+import pandas as pd
+import time
+import mlflow
+
+
 class DspyConfig:
     """
     Classe para configuração de métricas, assinatura DSPy e análise de sentimento de reviews.
@@ -5,9 +15,8 @@ class DspyConfig:
     """
 
     def __init__(self):
-        # 1. Configuração de Métricas (Accumulators)
-        self.success_count = spark.sparkContext.accumulator(0)
-        self.error_count = spark.sparkContext.accumulator(0)
+        self.success_count = 0
+        self.error_count = 0
 
         # 2. Definir Signature (DSPy)
         class ExtractSentimentReason(dspy.Signature):
@@ -21,6 +30,7 @@ class DspyConfig:
 
         # Pegar chave do secret
         self.OPENROUTER_API_KEY = dbutils.secrets.get("openrouter", "api_key") 
+        self.dspy = dspy
 
         # Configurar DSPy localmente
         self.lm_config = dspy.LM(
@@ -28,17 +38,17 @@ class DspyConfig:
             api_key=self.OPENROUTER_API_KEY,
             max_tokens=256
         )
-        dspy.configure(lm=self.lm_test)
+        self.dspy.configure(lm=self.lm_config)
 
     def test_api(self):
         print("Iniciando teste de chamada API...")
         try:
             # Definir a classe inline só para teste
             class TestSignature(dspy.Signature):
-                texto = dspy.InputField()
-                resposta = dspy.OutputField()
+                texto = self.dspy.InputField()
+                resposta = self.dspy.OutputField()
             
-            predictor = dspy.Predict(TestSignature)
+            predictor = self.dspy.Predict(TestSignature)
             resultado = predictor(texto="Diga 'Olá Mundo' em português.")
             
             print("\n✅ SUCESSO! A API respondeu:")
