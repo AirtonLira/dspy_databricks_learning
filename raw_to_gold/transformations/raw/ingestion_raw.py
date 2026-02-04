@@ -7,7 +7,7 @@ from pyspark.sql.functions import *
 # RAW LAYER - Ingestão de Dados Brutos
 # ========================================
 @dp.table(
-    name="_b_2_w_reviews",  
+    name="raw_b_2_w_reviews",  
     comment="Tabela raw da ingestão do csv de avaliações dos clientes"
 )
 def ingestion_raw_layer():

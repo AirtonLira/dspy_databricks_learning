@@ -2,22 +2,17 @@ import dspy
 import pandas as pd
 import json
 import time
-import dlt
+from pyspark.sql.types import StringType
+from utils.dspy_config import DspyConfig
 from pyspark.sql.functions import col, pandas_udf, from_json, schema_of_json, lit, avg
 from pyspark.sql.types import StringType, StructType, StructField, FloatType, IntegerType
 from dspy import InputField, OutputField, Signature
+from pyspark import pipelines as dp
 
 # ==============================================================================
 # 1. Configuração de Segredos (Broadcast para Segurança)
 # ==============================================================================
-# Tenta pegar a chave. Se falhar no driver, o pipeline nem começa (Fail Fast).
-try:
-    API_KEY_GLOBAL = dbutils.secrets.get("openrouter", "api_key")
-except Exception as e:
-    print(f"CRITICAL: Não foi possível ler o secret. Erro: {e}")
-    # Fallback ou string vazia para não quebrar o import, mas vai falhar na execucao se for vazio
-    API_KEY_GLOBAL = ""
-
+dspy_config = DspyConfig()
 
 # ==============================================================================
 # 2. Definição do Modelo DSPy (Signature)
@@ -32,7 +27,6 @@ class ExtractSentimentReason(Signature):
     reason: str = OutputField(
         desc="Motivo curto (max 10 palavras). Ex: 'entrega atrasada', 'produto defeituoso'."
     )
-
 
 # ==============================================================================
 # 3. Lógica de Processamento (Worker Side)
@@ -70,7 +64,6 @@ def process_single_review(review_text: str, sentiment: str, lm_instance):
     
     return json.dumps(result) # Retorna JSON string para o Spark parsear depois
 
-
 # ==============================================================================
 # 4. Pandas UDF Otimizada
 # ==============================================================================
@@ -78,11 +71,13 @@ def process_single_review(review_text: str, sentiment: str, lm_instance):
 def extract_reason_udf(texts: pd.Series, sentiments: pd.Series) -> pd.Series:
     results = []
 
-    
+    dspy_config = DspyConfig()
+    dspy_config.test_api()
+
     # 2. Configura o modelo uma vez por batch
     lm = dspy.LM(
         model="openrouter/liquid/lfm-2.5-1.2b-instruct:free",
-        api_key=API_KEY_GLOBAL,
+        api_key=dspy_config.OPENROUTER_API_KEY,
         max_tokens=128
     )
     
@@ -104,18 +99,16 @@ def extract_reason_udf(texts: pd.Series, sentiments: pd.Series) -> pd.Series:
             
     return pd.Series(results)
 
-
 # ==============================================================================
-# 5. Pipeline DLT (Gold Layer)
+# 5. Pipeline Gold Layer
 # ==============================================================================
-@dlt.table(
+@dp.materialized_view(
     name="gold_reviews_reason_final",
     comment="Tabela final com motivos extraídos via LLM e métricas de performance."
 )
-@dlt.expect("valid_extraction", "dspy_status = 'success'")
 def gold_pipeline_logic():
     # 1. Leitura Conectada (Isso gera a linha no gráfico!)
-    df_in = dlt.read("_gold_b_2_reviews").limit(50) 
+    df_in = spark.read.table("silver_b_2_reviews").limit(50) 
     
     # 2. Aplicação da IA
     df_processed = df_in.withColumn(
@@ -135,15 +128,4 @@ def gold_pipeline_logic():
     # 4. Parseamento e Limpeza final
     return (
         df_processed
-        .withColumn("parsed", from_json(col("dspy_json_raw"), json_schema))
-        .select(
-            col("reviewer_id"),
-            col("review_text"),
-            col("sentiment"),
-            col("parsed.reason").alias("sentiment_reason"),
-            col("parsed.latency_sec").alias("llm_latency"),
-            col("parsed.word_count").alias("reason_word_count"),
-            col("parsed.status").alias("dspy_status"),
-            col("parsed.error_msg").alias("dspy_error_detail")
-        )
     )

@@ -18,16 +18,6 @@ class DspyConfig:
         self.success_count = 0
         self.error_count = 0
 
-        # 2. Definir Signature (DSPy)
-        class ExtractSentimentReason(dspy.Signature):
-            """
-            Analista de reviews brasileiro que identifica o motivo principal do sentimento.
-            Retorna frase curta em português sobre produto ou ocasião que gerou o sentimento.
-            """
-            review_text: str = dspy.InputField(desc="Texto completo da avaliação do cliente")
-            sentiment: str = dspy.OutputField(desc="Sentimento para classificar apartir do texto: positivo, negativo ou neutro")
-        self.ExtractSentimentReason = ExtractSentimentReason
-
         # Pegar chave do secret
         self.OPENROUTER_API_KEY = dbutils.secrets.get("openrouter", "api_key") 
         self.dspy = dspy
@@ -40,20 +30,32 @@ class DspyConfig:
         )
         self.dspy.configure(lm=self.lm_config)
 
-    def test_api(self):
-        print("Iniciando teste de chamada API...")
+        # Definir assinatura para análise de sentimento
+        self.sentiment_signature = Signature(
+            inputs=[InputField(name="texto", dtype=str, description="Texto para análise de sentimento")],
+            outputs=[OutputField(name="sentimento", dtype=str, description="Sentimento: positivo, negativo ou neutro")]
+        )
+
+    def predict(self, texto, signature=None):
         try:
-            # Definir a classe inline só para teste
-            class TestSignature(dspy.Signature):
-                texto = self.dspy.InputField()
-                resposta = self.dspy.OutputField()
-            
-            predictor = self.dspy.Predict(TestSignature)
-            resultado = predictor(texto="Diga 'Olá Mundo' em português.")
-            
-            print("\n✅ SUCESSO! A API respondeu:")
-            print(resultado.resposta)
+            # Usar assinatura de sentimento se não for fornecida outra
+            if signature is None:
+                signature = self.sentiment_signature
+
+            # Criar preditor DSPy com a assinatura
+            predictor = self.dspy.Predict(signature)
+
+            # Realizar predição
+            result = predictor(texto=texto)
+
+            # Extrair sentimento do resultado
+            sentimento = result.sentimento if hasattr(result, "sentimento") else None
+
             self.success_count += 1
+            return sentimento
         except Exception as e:
-            print(f"\n❌ ERRO NA API: {str(e)}")
             self.error_count += 1
+            return None
+            if signature is None:
+                signature = self.sentiment_signature
+            predictor
